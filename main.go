@@ -5,11 +5,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	v1 "k8s.io/api/core/v1"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+
+	v1 "k8s.io/api/core/v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -80,6 +81,12 @@ func main() {
 					fmt.Printf("[\u001B[1;31m %d \u001B[0m] %s \u001B[0;32m%s\u001B[0m \n", i, pod.Name, pod.Status.Phase)
 				}
 			}
+		}
+
+		pods, err = clientset.CoreV1().Pods(*namespace).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			fmt.Printf("Error listing pods: %v\n", err)
+			return
 		}
 	}
 }
