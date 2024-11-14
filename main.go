@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"flag"
 	"fmt"
@@ -9,6 +8,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/peterh/liner"
 
 	v1 "k8s.io/api/core/v1"
 
@@ -18,6 +19,10 @@ import (
 )
 
 func main() {
+	line := liner.NewLiner()
+	defer line.Close()
+	line.SetCtrlCAborts(true)
+
 	// 获取配置文件路径
 	kubeconfig := flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 	namespace := flag.String("namespace", "default", "namespace")
@@ -56,18 +61,27 @@ func main() {
 
 	for {
 
-		// 用户输入编号 或者 继续搜索
-		reader := bufio.NewReader(os.Stdin)
 		fmt.Println("Enter exit to quit")
-		fmt.Print("Enter pod number or search: ")
-		input, _ := reader.ReadString('\n')
+		// 用户输入编号 或者 继续搜索
+		//reader := bufio.NewReader(os.Stdin)
+		//fmt.Print("Enter pod number or search: ")
+
+		input, err := line.Prompt("Enter pod number or search: ")
+		if err != nil {
+			fmt.Printf("Error reading input: %v\n", err)
+			return
+		}
+		//input, _ = reader.ReadString('\n')
 		input = strings.TrimSpace(input)
+		if input != "" {
+			line.AppendHistory(input)
+		}
 
 		// 检查输入是否为数字
 		podNumber, err := strconv.Atoi(input)
 		if err == nil && podNumber >= 0 && podNumber < len(pods.Items) {
 			selectedPod := pods.Items[podNumber]
-			handlePodAction(selectedPod, kubeconfig, namespace)
+			handlePodAction(line, selectedPod, kubeconfig, namespace)
 		} else {
 			//如果== exit 退出
 			if input == "exit" {
@@ -91,19 +105,18 @@ func main() {
 	}
 }
 
-func handlePodAction(pod v1.Pod, kubeconfig, namespace *string) {
-	reader := bufio.NewReader(os.Stdin)
+func handlePodAction(line *liner.State, pod v1.Pod, kubeconfig, namespace *string) {
 	fmt.Println("====================================")
 	// 高亮显示选中的Pod名称
 	fmt.Printf("Selected pod: \033[1;33m %s \033[0m \n", pod.Name)
 	fmt.Println("====================================")
-	fmt.Println("Enter action [l, lf, s, q]: ")
+	fmt.Println("command action [l, lf, s, q]: ")
 	fmt.Println("\u001B[0;31ml\u001B[0m: view all logs")
 	fmt.Println("\u001B[0;31mlf\u001B[0m: view rolling logs")
 	fmt.Println("\u001B[0;31ms\u001B[0m: enter shell")
 	fmt.Println("\u001B[0;31mq\u001B[0m: quit")
 
-	action, _ := reader.ReadString('\n')
+	action, _ := line.Prompt("Enter action: ")
 	action = strings.TrimSpace(action)
 
 	switch action {
