@@ -83,7 +83,7 @@ func main() {
 		var action = new(string)
 		prompt := &survey.Select{
 			Message: fmt.Sprintf("choose action in namespace %s:", *namespace),
-			Options: []string{"pods", "svc", "configmap", "exit"},
+			Options: []string{"pods", "svc", "pvc", "configmap", "exit"},
 		}
 		err = survey.AskOne(prompt, action)
 		if err != nil {
@@ -98,6 +98,8 @@ func main() {
 			handleNamespaceSvcAction()
 		case "configmap":
 			handleNamespaceConfigMapAction()
+		case "pvc":
+			handleNamespacePvcAction()
 		case "exit":
 			fmt.Println("bye!!!")
 			os.Exit(0)
@@ -107,8 +109,130 @@ func main() {
 
 }
 
+func handleNamespacePvcAction() {
+	// 获取Pvc列表
+	pvcs, err := k8sClient.CoreV1().PersistentVolumeClaims(*namespace).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		fmt.Printf("Error listing pvcs: %v\n", err)
+		fmt.Printf("获取命名空间%s下的Pvc列表失败", *namespace)
+		return
+	}
+	// 打印Pvc列表
+	fmt.Println("pvcs in namespace", *namespace)
+	printPvcTable(pvcs, "", nil)
+	for {
+		input := ""
+		prompt := &survey.Input{
+			Message: "Enter pvc number or search, exit to quit: ",
+		}
+		survey.AskOne(prompt, &input)
+
+		// 	// 检查输入是否为数字
+		pvcNumber, err := strconv.Atoi(input)
+		if err == nil && pvcNumber >= 0 && pvcNumber < len(pvcs.Items) {
+			selectedPvc := pvcs.Items[pvcNumber]
+			handlePvcAction(line, selectedPvc)
+		} else {
+			//如果== exit 退出
+			if input == "exit" {
+				return
+			}
+			printPvcTable(pvcs, input, func(pvc v1.PersistentVolumeClaim, input string) bool {
+				return strings.Contains(pvc.Name, input)
+			})
+		}
+	}
+}
+
+func handlePvcAction(line *liner.State, selectedPvc v1.PersistentVolumeClaim) {
+	// 选中的Pvc
+	for {
+		fmt.Println("====================================")
+		// 高亮显示选中的Pvc名称
+		fmt.Printf("Selected Pvc: \033[1;33m %s \033[0m \n", selectedPvc.Name)
+		fmt.Println("====================================")
+		fmt.Println("command action [p, q]: ")
+		fmt.Println("\u001B[0;31m p \u001B[0m: print Pvc info")
+		fmt.Println("\u001B[0;31m q \u001B[0m: quit")
+
+		action, _ := line.Prompt("Enter action: ")
+		action = strings.TrimSpace(action)
+
+		switch action {
+		case "p":
+			cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "get", "pvc", selectedPvc.Name, "-o", "yaml")
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Run()
+		case "q":
+			return
+		default:
+			fmt.Println("Invalid action")
+		}
+	}
+}
+
 func handleNamespaceConfigMapAction() {
-	panic("unimplemented")
+	// 获取ConfigMap列表
+	configMaps, err := k8sClient.CoreV1().ConfigMaps(*namespace).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		fmt.Printf("Error listing configmaps: %v\n", err)
+		fmt.Printf("获取命名空间%s下的ConfigMap列表失败", *namespace)
+		return
+	}
+	// 打印ConfigMap列表
+	fmt.Println("ConfigMaps in namespace", *namespace)
+	printConfigMapTable(configMaps, "", nil)
+
+	for {
+		input := ""
+		prompt := &survey.Input{
+			Message: "Enter pod number or search, exit to quit: ",
+		}
+		survey.AskOne(prompt, &input)
+
+		// 	// 检查输入是否为数字
+		podNumber, err := strconv.Atoi(input)
+		if err == nil && podNumber >= 0 && podNumber < len(configMaps.Items) {
+			selectedConfigMap := configMaps.Items[podNumber]
+			handleConfigMapAction(line, selectedConfigMap)
+		} else {
+			//如果== exit 退出
+			if input == "exit" {
+				return
+			}
+			printConfigMapTable(configMaps, input, func(pod v1.ConfigMap, input string) bool {
+				return strings.Contains(pod.Name, input)
+			})
+		}
+	}
+}
+
+func handleConfigMapAction(line *liner.State, selectedConfigMap v1.ConfigMap) {
+	for {
+		fmt.Println("====================================")
+		// 高亮显示选中的ConfigMap名称
+		fmt.Printf("Selected ConfigMap: \033[1;33m %s \033[0m \n", selectedConfigMap.Name)
+		fmt.Println("====================================")
+		fmt.Println("command action [p, q]: ")
+		fmt.Println("\u001B[0;31m p \u001B[0m: print ConfigMap info")
+		fmt.Println("\u001B[0;31m q \u001B[0m: quit")
+
+		action, _ := line.Prompt("Enter action: ")
+		action = strings.TrimSpace(action)
+
+		switch action {
+		case "p":
+			cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "get", "configmap", selectedConfigMap.Name, "-o", "yaml")
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Run()
+		case "q":
+			return
+		default:
+			fmt.Println("Invalid action")
+		}
+	}
 }
 
 func handleNamespaceSvcAction() {
@@ -148,22 +272,22 @@ func handleNamespaceSvcAction() {
 }
 
 func handleNamespacePodAction() {
-	// 获取Pod列表
-	pods, err := k8sClient.CoreV1().Pods(*namespace).List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		fmt.Printf("Error listing pods: %v\n", err)
-		fmt.Printf("获取命名空间%s下的Pod列表失败", *namespace)
-		return
-	}
-
-	// 显示Pod列表并标号
-	fmt.Println("Pods in namespace", *namespace)
-	// for i, pod := range pods.Items {
-	// 	fmt.Printf("[\u001B[1;31m %d \u001B[0m] %s \u001B[0;32m%s\u001B[0m \n", i, pod.Name, pod.Status.Phase)
-	// }
-	printPodTable(pods, "", nil)
 
 	for {
+		// 获取Pod列表
+		pods, err := k8sClient.CoreV1().Pods(*namespace).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			fmt.Printf("Error listing pods: %v\n", err)
+			fmt.Printf("获取命名空间%s下的Pod列表失败", *namespace)
+			return
+		}
+
+		// 显示Pod列表并标号
+		fmt.Println("Pods in namespace", *namespace)
+		// for i, pod := range pods.Items {
+		// 	fmt.Printf("[\u001B[1;31m %d \u001B[0m] %s \u001B[0;32m%s\u001B[0m \n", i, pod.Name, pod.Status.Phase)
+		// }
+		printPodTable(pods, "", nil)
 		input := ""
 		prompt := &survey.Input{
 			Message: "Enter pod number or search, exit to quit: ",
@@ -193,6 +317,42 @@ func handleNamespacePodAction() {
 		}
 	}
 
+}
+
+func printPvcTable(pvcs *v1.PersistentVolumeClaimList, s string, f func(pvc v1.PersistentVolumeClaim, input string) bool) {
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Number", "Name", "Status", "StorageClass", "Capacity", "AccessMode"})
+	for i, pvc := range pvcs.Items {
+		if f != nil && !f(pvc, s) {
+			continue
+		}
+		var models []string = make([]string, 0)
+		for _, model := range pvc.Spec.AccessModes {
+			models = append(models, string(model))
+		}
+		table.Append([]string{
+			fmt.Sprintf("%d", i),
+			pvc.Name,
+			string(pvc.Status.Phase),
+			*pvc.Spec.StorageClassName,
+			pvc.Status.Capacity.Storage().String(),
+			strings.Join(models, ","),
+		})
+	}
+	table.Render()
+
+}
+
+func printConfigMapTable(configMaps *v1.ConfigMapList, input string, f func(pod v1.ConfigMap, input string) bool) {
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Number", "Name", "Data"})
+	for i, pod := range configMaps.Items {
+		if f != nil && !f(pod, input) {
+			continue
+		}
+		table.Append([]string{fmt.Sprintf("%d", i), pod.Name, fmt.Sprintf("%d", len(pod.Data))})
+	}
+	table.Render()
 }
 
 func printPodTable(pods *v1.PodList, input string, f func(pod v1.Pod, input string) bool) {
@@ -266,43 +426,44 @@ func handleSvcAction(line *liner.State, svc v1.Service) {
 }
 
 func handlePodAction(line *liner.State, pod v1.Pod) {
-	fmt.Println("====================================")
-	// 高亮显示选中的Pod名称
-	fmt.Printf("Selected pod: \033[1;33m %s \033[0m \n", pod.Name)
-	fmt.Println("====================================")
-	fmt.Println("command action [l, lf, s, q]: ")
-	fmt.Println("\u001B[0;31ml\u001B[0m: view all logs")
-	fmt.Println("\u001B[0;31mlf\u001B[0m: view rolling logs")
-	fmt.Println("\u001B[0;31ms\u001B[0m: enter shell")
-	fmt.Println("\u001B[0;31mq\u001B[0m: quit")
+	for {
+		fmt.Println("====================================")
+		// 高亮显示选中的Pod名称
+		fmt.Printf("Selected pod: \033[1;33m %s \033[0m \n", pod.Name)
+		fmt.Println("====================================")
+		fmt.Println("command action [l, lf, s, q]: ")
+		fmt.Println("\u001B[0;31ml\u001B[0m: view all logs")
+		fmt.Println("\u001B[0;31mlf\u001B[0m: view rolling logs")
+		fmt.Println("\u001B[0;31ms\u001B[0m: enter shell")
+		fmt.Println("\u001B[0;31mq\u001B[0m: quit")
 
-	action, _ := line.Prompt("Enter action: ")
-	action = strings.TrimSpace(action)
+		action, _ := line.Prompt("Enter action: ")
+		action = strings.TrimSpace(action)
 
-	switch action {
-	case "l":
-		// 查看日志
-		cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "logs", pod.Name)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Run()
-	case "lf":
-		// 查看滚动日志
-		cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "logs", "-f", "--tail=1000", pod.Name)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Run()
-	case "s":
-		// 进入shell
-		cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "exec", "-it", pod.Name, "--", "/bin/bash")
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Run()
-	case "q":
-		fmt.Println("bye bye")
-		os.Exit(0)
-	default:
-		fmt.Println("Invalid action")
+		switch action {
+		case "l":
+			// 查看日志
+			cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "logs", pod.Name)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Run()
+		case "lf":
+			// 查看滚动日志
+			cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "logs", "-f", "--tail=1000", pod.Name)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Run()
+		case "s":
+			// 进入shell
+			cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "exec", "-it", pod.Name, "--", "/bin/bash")
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Run()
+		case "q":
+			return
+		default:
+			fmt.Println("Invalid action")
+		}
 	}
 }
