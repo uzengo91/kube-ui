@@ -111,15 +111,15 @@ func main() {
 
 func handleNamespacePvcAction() {
 	// 获取Pvc列表
-	pvcs, err := k8sClient.CoreV1().PersistentVolumeClaims(*namespace).List(context.TODO(), metav1.ListOptions{})
+	pvcList, err := k8sClient.CoreV1().PersistentVolumeClaims(*namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Printf("Error listing pvcs: %v\n", err)
 		fmt.Printf("获取命名空间%s下的Pvc列表失败", *namespace)
 		return
 	}
 	// 打印Pvc列表
-	fmt.Println("pvcs in namespace", *namespace)
-	printPvcTable(pvcs, "", nil)
+	fmt.Println("pvc in namespace", *namespace)
+	printPvcTable(pvcList, "", nil)
 	for {
 		input := ""
 		prompt := &survey.Input{
@@ -129,15 +129,15 @@ func handleNamespacePvcAction() {
 
 		// 	// 检查输入是否为数字
 		pvcNumber, err := strconv.Atoi(input)
-		if err == nil && pvcNumber >= 0 && pvcNumber < len(pvcs.Items) {
-			selectedPvc := pvcs.Items[pvcNumber]
+		if err == nil && pvcNumber >= 0 && pvcNumber < len(pvcList.Items) {
+			selectedPvc := pvcList.Items[pvcNumber]
 			handlePvcAction(line, selectedPvc)
 		} else {
 			//如果== exit 退出
 			if input == "exit" {
 				return
 			}
-			printPvcTable(pvcs, input, func(pvc v1.PersistentVolumeClaim, input string) bool {
+			printPvcTable(pvcList, input, func(pvc v1.PersistentVolumeClaim, input string) bool {
 				return strings.Contains(pvc.Name, input)
 			})
 		}
@@ -196,6 +196,7 @@ func handleNamespaceConfigMapAction() {
 		if err == nil && podNumber >= 0 && podNumber < len(configMaps.Items) {
 			selectedConfigMap := configMaps.Items[podNumber]
 			handleConfigMapAction(line, selectedConfigMap)
+			printConfigMapTable(configMaps, "", nil)
 		} else {
 			//如果== exit 退出
 			if input == "exit" {
@@ -237,7 +238,7 @@ func handleConfigMapAction(line *liner.State, selectedConfigMap v1.ConfigMap) {
 
 func handleNamespaceSvcAction() {
 	// 获取Service列表
-	svcs, err := k8sClient.CoreV1().Services(*namespace).List(context.TODO(), metav1.ListOptions{})
+	svcList, err := k8sClient.CoreV1().Services(*namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Printf("Error listing services: %v\n", err)
 		fmt.Printf("获取命名空间%s下的Service列表失败", *namespace)
@@ -245,7 +246,7 @@ func handleNamespaceSvcAction() {
 	}
 	// 打印Service列表
 	fmt.Println("Services in namespace", *namespace)
-	printSvcTable(svcs, "", nil)
+	printSvcTable(svcList, "", nil)
 	for {
 		input := ""
 		prompt := &survey.Input{
@@ -255,15 +256,16 @@ func handleNamespaceSvcAction() {
 
 		// 	// 检查输入是否为数字
 		podNumber, err := strconv.Atoi(input)
-		if err == nil && podNumber >= 0 && podNumber < len(svcs.Items) {
-			selectedSvc := svcs.Items[podNumber]
+		if err == nil && podNumber >= 0 && podNumber < len(svcList.Items) {
+			selectedSvc := svcList.Items[podNumber]
 			handleSvcAction(line, selectedSvc)
+			printSvcTable(svcList, "", nil)
 		} else {
 			//如果== exit 退出
 			if input == "exit" {
 				return
 			}
-			printSvcTable(svcs, input, func(pod v1.Service, input string) bool {
+			printSvcTable(svcList, input, func(pod v1.Service, input string) bool {
 				return strings.Contains(pod.Name, input)
 			})
 		}
@@ -273,21 +275,22 @@ func handleNamespaceSvcAction() {
 
 func handleNamespacePodAction() {
 
-	for {
-		// 获取Pod列表
-		pods, err := k8sClient.CoreV1().Pods(*namespace).List(context.TODO(), metav1.ListOptions{})
-		if err != nil {
-			fmt.Printf("Error listing pods: %v\n", err)
-			fmt.Printf("获取命名空间%s下的Pod列表失败", *namespace)
-			return
-		}
+	// 获取Pod列表
+	pods, err := k8sClient.CoreV1().Pods(*namespace).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		fmt.Printf("Error listing pods: %v\n", err)
+		fmt.Printf("获取命名空间%s下的Pod列表失败", *namespace)
+		return
+	}
 
-		// 显示Pod列表并标号
-		fmt.Println("Pods in namespace", *namespace)
-		// for i, pod := range pods.Items {
-		// 	fmt.Printf("[\u001B[1;31m %d \u001B[0m] %s \u001B[0;32m%s\u001B[0m \n", i, pod.Name, pod.Status.Phase)
-		// }
-		printPodTable(pods, "", nil)
+	// 显示Pod列表并标号
+	fmt.Println("Pods in namespace", *namespace)
+	// for i, pod := range pods.Items {
+	// 	fmt.Printf("[\u001B[1;31m %d \u001B[0m] %s \u001B[0;32m%s\u001B[0m \n", i, pod.Name, pod.Status.Phase)
+	// }
+	printPodTable(pods, "", nil)
+	for {
+
 		input := ""
 		prompt := &survey.Input{
 			Message: "Enter pod number or search, exit to quit: ",
@@ -299,6 +302,7 @@ func handleNamespacePodAction() {
 		if err == nil && podNumber >= 0 && podNumber < len(pods.Items) {
 			selectedPod := pods.Items[podNumber]
 			handlePodAction(line, selectedPod)
+			printPodTable(pods, "", nil)
 		} else {
 			//如果== exit 退出
 			if input == "exit" {
