@@ -132,6 +132,8 @@ func handleNamespacePvcAction() {
 		if err == nil && pvcNumber >= 0 && pvcNumber < len(pvcList.Items) {
 			selectedPvc := pvcList.Items[pvcNumber]
 			handlePvcAction(line, selectedPvc)
+			pvcList, _ = k8sClient.CoreV1().PersistentVolumeClaims(*namespace).List(context.TODO(), metav1.ListOptions{})
+			printPvcTable(pvcList, "", nil)
 		} else {
 			//如果== exit 退出
 			if input == "exit" {
@@ -151,9 +153,9 @@ func handlePvcAction(line *liner.State, selectedPvc v1.PersistentVolumeClaim) {
 		// 高亮显示选中的Pvc名称
 		fmt.Printf("Selected Pvc: \033[1;33m %s \033[0m \n", selectedPvc.Name)
 		fmt.Println("====================================")
-		fmt.Println("command action [p, q]: ")
+		fmt.Println("command action [p, exit]: ")
 		fmt.Println("\u001B[0;31m p \u001B[0m: print Pvc info")
-		fmt.Println("\u001B[0;31m q \u001B[0m: quit")
+		fmt.Println("\u001B[0;31m exit \u001B[0m: quit current action")
 
 		action, _ := line.Prompt("Enter action: ")
 		action = strings.TrimSpace(action)
@@ -164,7 +166,7 @@ func handlePvcAction(line *liner.State, selectedPvc v1.PersistentVolumeClaim) {
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			cmd.Run()
-		case "q":
+		case "exit":
 			return
 		default:
 			fmt.Println("Invalid action")
@@ -196,6 +198,7 @@ func handleNamespaceConfigMapAction() {
 		if err == nil && podNumber >= 0 && podNumber < len(configMaps.Items) {
 			selectedConfigMap := configMaps.Items[podNumber]
 			handleConfigMapAction(line, selectedConfigMap)
+			configMaps, _ = k8sClient.CoreV1().ConfigMaps(*namespace).List(context.TODO(), metav1.ListOptions{})
 			printConfigMapTable(configMaps, "", nil)
 		} else {
 			//如果== exit 退出
@@ -215,9 +218,9 @@ func handleConfigMapAction(line *liner.State, selectedConfigMap v1.ConfigMap) {
 		// 高亮显示选中的ConfigMap名称
 		fmt.Printf("Selected ConfigMap: \033[1;33m %s \033[0m \n", selectedConfigMap.Name)
 		fmt.Println("====================================")
-		fmt.Println("command action [p, q]: ")
+		fmt.Println("command action [p, exit]: ")
 		fmt.Println("\u001B[0;31m p \u001B[0m: print ConfigMap info")
-		fmt.Println("\u001B[0;31m q \u001B[0m: quit")
+		fmt.Println("\u001B[0;31m exit \u001B[0m: quit current action")
 
 		action, _ := line.Prompt("Enter action: ")
 		action = strings.TrimSpace(action)
@@ -228,7 +231,7 @@ func handleConfigMapAction(line *liner.State, selectedConfigMap v1.ConfigMap) {
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			cmd.Run()
-		case "q":
+		case "exit":
 			return
 		default:
 			fmt.Println("Invalid action")
@@ -259,6 +262,7 @@ func handleNamespaceSvcAction() {
 		if err == nil && podNumber >= 0 && podNumber < len(svcList.Items) {
 			selectedSvc := svcList.Items[podNumber]
 			handleSvcAction(line, selectedSvc)
+			svcList, _ = k8sClient.CoreV1().Services(*namespace).List(context.TODO(), metav1.ListOptions{})
 			printSvcTable(svcList, "", nil)
 		} else {
 			//如果== exit 退出
@@ -302,6 +306,7 @@ func handleNamespacePodAction() {
 		if err == nil && podNumber >= 0 && podNumber < len(pods.Items) {
 			selectedPod := pods.Items[podNumber]
 			handlePodAction(line, selectedPod)
+			pods, _ = k8sClient.CoreV1().Pods(*namespace).List(context.TODO(), metav1.ListOptions{})
 			printPodTable(pods, "", nil)
 		} else {
 			//如果== exit 退出
@@ -400,10 +405,10 @@ func handleSvcAction(line *liner.State, svc v1.Service) {
 		// 高亮显示选中的svc名称
 		fmt.Printf("Selected svc: \033[1;33m %s \033[0m \n", svc.Name)
 		fmt.Println("====================================")
-		fmt.Println("command action [p fw q]: ")
+		fmt.Println("command action [p fw exit]: ")
 		fmt.Println("\u001B[0;31m p \u001B[0m: print svc info")
 		fmt.Println("\u001B[0;31m fw \u001B[0m: forward svc port")
-		fmt.Println("\u001B[0;31m q \u001B[0m: quit")
+		fmt.Println("\u001B[0;31m exit \u001B[0m: quit current action")
 
 		action, _ := line.Prompt("Enter action: ")
 		action = strings.TrimSpace(action)
@@ -421,7 +426,7 @@ func handleSvcAction(line *liner.State, svc v1.Service) {
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			cmd.Run()
-		case "q":
+		case "exit":
 			return
 		default:
 			fmt.Println("Invalid action")
@@ -435,11 +440,11 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 		// 高亮显示选中的Pod名称
 		fmt.Printf("Selected pod: \033[1;33m %s \033[0m \n", pod.Name)
 		fmt.Println("====================================")
-		fmt.Println("command action [l, lf, s, q]: ")
+		fmt.Println("command action [l, lf, s, exit]: ")
 		fmt.Println("\u001B[0;31ml\u001B[0m: view all logs")
 		fmt.Println("\u001B[0;31mlf\u001B[0m: view rolling logs")
 		fmt.Println("\u001B[0;31ms\u001B[0m: enter shell")
-		fmt.Println("\u001B[0;31mq\u001B[0m: quit")
+		fmt.Println("\u001B[0;31m exit \u001B[0m: quit current action")
 
 		action, _ := line.Prompt("Enter action: ")
 		action = strings.TrimSpace(action)
@@ -464,7 +469,7 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			cmd.Run()
-		case "q":
+		case "exit":
 			return
 		default:
 			fmt.Println("Invalid action")
