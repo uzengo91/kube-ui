@@ -449,16 +449,23 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 		// 高亮显示选中的Pod名称
 		fmt.Printf("Selected pod: \033[1;33m %s \033[0m \n", pod.Name)
 		fmt.Println("====================================")
-		fmt.Println("command action [l, lf, s, exit]: ")
-		fmt.Println("\u001B[0;31ml\u001B[0m: view all logs")
-		fmt.Println("\u001B[0;31mlf\u001B[0m: view rolling logs")
-		fmt.Println("\u001B[0;31ms\u001B[0m: enter shell")
+		fmt.Println("command action [p, l, lf, s, exit]: ")
+		fmt.Println("\u001B[0;31m p \u001B[0m: view all logs")
+		fmt.Println("\u001B[0;31m l \u001B[0m: view all logs")
+		fmt.Println("\u001B[0;31m lf \u001B[0m: view rolling logs")
+		fmt.Println("\u001B[0;31m s \u001B[0m: enter shell")
 		fmt.Println("\u001B[0;31m exit \u001B[0m: quit current action")
 
 		action, _ := line.Prompt("Enter action: ")
 		action = strings.TrimSpace(action)
 
 		switch action {
+		case "p":
+			// 查看pod信息
+			cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "get", "pod", pod.Name, "-o", "yaml")
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Run()
 		case "l":
 			// 查看日志
 			cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "logs", pod.Name)
