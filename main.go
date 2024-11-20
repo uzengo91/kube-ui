@@ -372,7 +372,7 @@ func printPodTable(pods *v1.PodList, input string, f func(pod v1.Pod, input stri
 		if f != nil && !f(pod, input) {
 			continue
 		}
-		age := metav1.Now().Sub(pod.Status.StartTime.Time).Round(time.Second)
+		age := metav1.Now().Sub(pod.Status.StartTime.Time).Round(time.Minute)
 		restartCount := 0
 		table.Append([]string{
 			fmt.Sprintf("%d", i),
