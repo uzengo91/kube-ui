@@ -367,26 +367,18 @@ func printConfigMapTable(configMaps *v1.ConfigMapList, input string, f func(pod 
 
 func printPodTable(pods *v1.PodList, input string, f func(pod v1.Pod, input string) bool) {
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Number", "pod-Name", "pod-Status", "restart-times", "last-Error", "age"})
+	table.SetHeader([]string{"Number", "pod-Name", "pod-Status", "restart-times", "age"})
 	for i, pod := range pods.Items {
 		if f != nil && !f(pod, input) {
 			continue
 		}
 		age := metav1.Now().Sub(pod.Status.StartTime.Time).Round(time.Second)
 		restartCount := 0
-		lastError := ""
-		for _, cs := range pod.Status.ContainerStatuses {
-			restartCount += int(cs.RestartCount)
-			if cs.State.Waiting != nil {
-				lastError = cs.State.Waiting.Message
-			}
-		}
 		table.Append([]string{
 			fmt.Sprintf("%d", i),
 			pod.Name,
 			string(pod.Status.Phase),
 			fmt.Sprintf("%d", restartCount),
-			lastError,
 			age.String(),
 		})
 	}
