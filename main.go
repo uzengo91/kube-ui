@@ -450,7 +450,7 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 		fmt.Printf("Selected pod: \033[1;33m %s \033[0m \n", pod.Name)
 		fmt.Println("====================================")
 		fmt.Println("command action [p, l, lf, s, exit]: ")
-		fmt.Println("\u001B[0;31m p \u001B[0m: view all logs")
+		fmt.Println("\u001B[0;31m p \u001B[0m: print pod info")
 		fmt.Println("\u001B[0;31m l \u001B[0m: view all logs")
 		fmt.Println("\u001B[0;31m lf \u001B[0m: view rolling logs")
 		fmt.Println("\u001B[0;31m s \u001B[0m: enter shell")
