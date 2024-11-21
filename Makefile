@@ -34,3 +34,15 @@ build-linux:
 clean:
 	@echo "Cleaning up..."
 	rm -rf $(OUTPUT_DIR)
+
+# 如果是mac系统 复制产物到mac bin目录
+# 如果是linux系统 复制产物到linux bin目录
+.PHONY: install
+install:
+	@echo "installing..."
+ifeq ($(shell uname), Darwin)
+	cp $(OUTPUT_DIR)/$(PROJECT_NAME)-mac /usr/local/bin/$(PROJECT_NAME)
+else ifeq ($(shell uname), Linux)
+	cp $(OUTPUT_DIR)/$(PROJECT_NAME) /usr/local/bin/$(PROJECT_NAME)
+endif
+
