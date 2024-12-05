@@ -17,17 +17,17 @@ all: build-windows build-linux build-mac
 .PHONY: build-windows
 build-windows:
 	@echo "Building for Windows..."
-	GOOS=windows GOARCH=amd64 $(GO) build -o $(OUTPUT_DIR)/$(PROJECT_NAME).exe
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -o $(OUTPUT_DIR)/$(PROJECT_NAME).exe
 
 build-mac:
 	@echo "Building for Mac..."
-	GOOS=darwin GOARCH=amd64 $(GO) build -o $(OUTPUT_DIR)/$(PROJECT_NAME)-mac
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GO) build -o $(OUTPUT_DIR)/$(PROJECT_NAME)-mac
 
 # 构建 Linux 可执行文件
 .PHONY: build-linux
 build-linux:
 	@echo "Building for Linux..."
-	GOOS=linux GOARCH=amd64 $(GO) build -o $(OUTPUT_DIR)/$(PROJECT_NAME)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -o $(OUTPUT_DIR)/$(PROJECT_NAME)
 
 # 清理构建文件
 .PHONY: clean
