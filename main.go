@@ -329,10 +329,10 @@ func handleNamespacePodAction() {
 
 }
 
-func printPvcTable(pvcs *v1.PersistentVolumeClaimList, s string, f func(pvc v1.PersistentVolumeClaim, input string) bool) {
+func printPvcTable(pvcList *v1.PersistentVolumeClaimList, s string, f func(pvc v1.PersistentVolumeClaim, input string) bool) {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Number", "Name", "Status", "StorageClass", "Capacity", "AccessMode"})
-	for i, pvc := range pvcs.Items {
+	for i, pvc := range pvcList.Items {
 		if f != nil && !f(pvc, s) {
 			continue
 		}
@@ -353,10 +353,10 @@ func printPvcTable(pvcs *v1.PersistentVolumeClaimList, s string, f func(pvc v1.P
 
 }
 
-func printConfigMapTable(configMaps *v1.ConfigMapList, input string, f func(pod v1.ConfigMap, input string) bool) {
+func printConfigMapTable(configMapList *v1.ConfigMapList, input string, f func(pod v1.ConfigMap, input string) bool) {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Number", "Name", "Data"})
-	for i, pod := range configMaps.Items {
+	for i, pod := range configMapList.Items {
 		if f != nil && !f(pod, input) {
 			continue
 		}
@@ -454,6 +454,8 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 		fmt.Println("\u001B[0;31m l \u001B[0m: view all logs")
 		fmt.Println("\u001B[0;31m lf \u001B[0m: view rolling logs")
 		fmt.Println("\u001B[0;31m s \u001B[0m: enter shell")
+		fmt.Println("\u001B[0;31m cp \u001B[0m: copy remote file to current path, download file name is remote file name")
+		fmt.Println("\u001B[0;31m u \u001B[0m: upload local file to remote pod")
 		fmt.Println("\u001B[0;31m exit \u001B[0m: quit current action")
 
 		action, _ := line.Prompt("Enter action: ")
@@ -475,6 +477,23 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 		case "lf":
 			// 查看滚动日志
 			cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "logs", "-f", "--tail=1000", pod.Name)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Run()
+		case "cp":
+			// 复制文件
+			src, _ := line.Prompt("Enter remote file path: ")
+			// 默认使用远程文件名
+			dst := src[strings.LastIndex(src, "/")+1:]
+			cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "cp", pod.Name+":"+src, dst)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Run()
+		case "u":
+			// 上传文件
+			src, _ := line.Prompt("Enter local file path: ")
+			dst, _ := line.Prompt("Enter remote file path: ")
+			cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "cp", src, pod.Name+":"+dst)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			cmd.Run()
