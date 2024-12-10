@@ -163,7 +163,7 @@ func handlePvcAction(line *liner.State, selectedPvc v1.PersistentVolumeClaim) {
 
 		switch action {
 		case "p":
-			execCommand("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "get", "pvc", selectedPvc.Name, "-o", "yaml")
+			execCommand("get", "pvc", selectedPvc.Name, "-o", "yaml")
 		case "exit":
 			return
 		default:
@@ -225,7 +225,7 @@ func handleConfigMapAction(line *liner.State, selectedConfigMap v1.ConfigMap) {
 
 		switch action {
 		case "p":
-			execCommand("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "get", "configmap", selectedConfigMap.Name, "-o", "yaml")
+			execCommand("get", "configmap", selectedConfigMap.Name, "-o", "yaml")
 		case "exit":
 			return
 		default:
@@ -418,11 +418,11 @@ func handleSvcAction(line *liner.State, svc v1.Service) {
 
 		switch action {
 		case "p":
-			execCommand("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "get", "svc", svc.Name, "-o", "yaml")
+			execCommand("get", "svc", svc.Name, "-o", "yaml")
 		case "fw":
 			ports, _ := line.Prompt("please enter forward ports, example: \"localPort1:svcPort1 localPort2:svcPort2\", so you can input \"8080:80 9090:90\" ")
 			ports = strings.TrimSpace(ports)
-			forwardPort := []string{"--kubeconfig", *kubeConfig, "-n", *namespace, "port-forward", "svc/" + svc.Name}
+			forwardPort := []string{"port-forward", "svc/" + svc.Name}
 			for _, portValue := range strings.Split(ports, " ") {
 				portPairNew := strings.TrimSpace(portValue)
 				if portPairNew == "" {
@@ -430,12 +430,7 @@ func handleSvcAction(line *liner.State, svc v1.Service) {
 				}
 				forwardPort = append(forwardPort, portPairNew)
 			}
-			execCommand("kubectl", forwardPort...)
-			//execCommand("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "port-forward", "svc/"+svc.Name, ports)
-			// cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "port-forward", "svc/"+svc.Name, ports)
-			// cmd.Stdout = os.Stdout
-			// cmd.Stderr = os.Stderr
-			// cmd.Run()
+			execCommand(forwardPort...)
 		case "exit":
 			return
 		default:
@@ -466,58 +461,36 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 		switch action {
 		case "p":
 			// 查看pod信息
-			execCommand("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "get", "pod", pod.Name, "-o", "yaml")
+			execCommand("get", "pod", pod.Name, "-o", "yaml")
 			// cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "get", "pod", pod.Name, "-o", "yaml")
 			// cmd.Stdout = os.Stdout
 			// cmd.Stderr = os.Stderr
 			// cmd.Run()
 		case "l":
 			// 查看日志
-			execCommand("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "logs", pod.Name)
-			// cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "logs", pod.Name)
-			// cmd.Stdout = os.Stdout
-			// cmd.Stderr = os.Stderr
-			// cmd.Run()
+			execCommand("logs", pod.Name)
 		case "lf":
 			// 查看滚动日志
-			execCommand("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "logs", "-f", "--tail=1000", pod.Name)
-			// cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "logs", "-f", "--tail=1000", pod.Name)
-			// cmd.Stdout = os.Stdout
-			// cmd.Stderr = os.Stderr
-			// cmd.Run()
+			execCommand("logs", "-f", "--tail=1000", pod.Name)
 		case "cp":
 			// 复制文件
 			src, _ := line.Prompt("Enter remote file path: ")
 			// 默认使用远程文件名
 			dst := src[strings.LastIndex(src, "/")+1:]
-			execCommand("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "cp", pod.Name+":"+src, dst)
-			// cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "cp", pod.Name+":"+src, dst)
-			// cmd.Stdout = os.Stdout
-			// cmd.Stderr = os.Stderr
-			// cmd.Run()
+			execCommand("cp", pod.Name+":"+src, dst)
 		case "u":
 			// 上传文件
 			src, _ := line.Prompt("Enter local file path: ")
 			dst, _ := line.Prompt("Enter remote file path: ")
-			execCommand("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "cp", src, pod.Name+":"+dst)
-			// cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "cp", src, pod.Name+":"+dst)
-			// cmd.Stdout = os.Stdout
-			// cmd.Stderr = os.Stderr
-			// cmd.Run()
+			execCommand("cp", src, pod.Name+":"+dst)
 		case "s":
 			// 进入shell
-			execCommand("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "exec", "-it", pod.Name, "--", "/bin/bash")
-
-			// cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "exec", "-it", pod.Name, "--", "/bin/bash")
-			// cmd.Stdin = os.Stdin
-			// cmd.Stdout = os.Stdout
-			// cmd.Stderr = os.Stderr
-			// cmd.Run()
+			execCommand("exec", "-it", pod.Name, "--", "/bin/bash")
 		case "fw":
 			// 端口转发
-			ports, _ := line.Prompt("please enter forward ports, example: \"local port1:pod port1 local port2:pod port2\", so you can input \"8080:80 9090:90\" ")
+			ports, _ := line.Prompt("please enter forward ports, example: \"localPort1:podPort1 localPort2:podPort2\", so you can input \"8080:80 9090:90\" ")
 			ports = strings.TrimSpace(ports)
-			forwardPort := []string{"--kubeconfig", *kubeConfig, "-n", *namespace, "port-forward", "pod/" + pod.Name}
+			forwardPort := []string{"port-forward", "pod/" + pod.Name}
 			for _, portPair := range strings.Split(ports, " ") {
 				portPairNew := strings.TrimSpace(portPair)
 				if portPairNew == "" {
@@ -525,7 +498,7 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 				}
 				forwardPort = append(forwardPort, portPairNew)
 			}
-			execCommand("kubectl", forwardPort...)
+			execCommand(forwardPort...)
 		case "exit":
 			return
 		default:
@@ -535,8 +508,10 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 
 }
 
-func execCommand(name string, arg ...string) {
-	cmd := exec.Command(name, arg...)
+func execCommand(arg ...string) {
+	defaultArg := []string{"--kubeconfig", *kubeConfig, "-n", *namespace}
+	arg = append(defaultArg, arg...)
+	cmd := exec.Command("kubectl", arg...)
 	fmt.Println("exec command: \u001B[0;31m " + cmd.String() + " \u001B[0m")
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
