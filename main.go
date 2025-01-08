@@ -49,6 +49,7 @@ func main() {
 	line.SetCtrlCAborts(true)
 
 	// 获取配置文件路径
+
 	kubeConfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 	namespace = flag.String("namespace", "", "k8s namespace to use")
 	flag.Parse()
@@ -521,11 +522,12 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 		// 高亮显示选中的Pod名称
 		fmt.Printf("Selected pod: \033[1;33m %s \033[0m \n", pod.Name)
 		fmt.Println("====================================")
-		fmt.Println("command action [p, l, lf, s, exit]: ")
+		fmt.Println("command action [p, l, lf, s, e, fw, cp, u, exit]: ")
 		fmt.Println("\u001B[0;31m p \u001B[0m: print pod info")
 		fmt.Println("\u001B[0;31m l \u001B[0m: view all logs")
 		fmt.Println("\u001B[0;31m lf \u001B[0m: view rolling logs")
 		fmt.Println("\u001B[0;31m s \u001B[0m: enter shell")
+		fmt.Println("\u001B[0;31m e \u001B[0m: view pod events")
 		fmt.Println("\u001B[0;31m fw \u001B[0m: port forward remote port to local")
 		fmt.Println("\u001B[0;31m cp \u001B[0m: copy remote file to current path, download file name is remote file name")
 		fmt.Println("\u001B[0;31m u \u001B[0m: upload local file to remote pod")
@@ -562,6 +564,9 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 		case "s":
 			// 进入shell
 			execCommand("exec", "-it", pod.Name, "--", "/bin/bash")
+		case "e":
+			// 查看pod事件
+			printPodEvents(pod)
 		case "fw":
 			// 端口转发
 			ports, _ := line.Prompt("please enter forward ports, example: \"localPort1:podPort1 localPort2:podPort2\", so you can input \"8080:80 9090:90\" ")
@@ -581,7 +586,37 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 			fmt.Println("Invalid action")
 		}
 	}
+}
 
+// 添加新函数用于打印pod事件
+func printPodEvents(pod v1.Pod) {
+	// 获取pod相关的事件
+	events, err := k8sClient.CoreV1().Events(*namespace).List(context.TODO(), metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Pod", pod.Name),
+	})
+	if err != nil {
+		fmt.Printf("Error getting pod events: %v\n", err)
+		return
+	}
+
+	// 创建表格
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Type", "Reason", "Age", "From", "Message"})
+
+	// 添加事件数据
+	for _, event := range events.Items {
+		age := metav1.Now().Sub(event.FirstTimestamp.Time).Round(time.Minute)
+		table.Append([]string{
+			event.Type,
+			event.Reason,
+			age.String(),
+			event.Source.Component,
+			event.Message,
+		})
+	}
+
+	// 渲染表格
+	table.Render()
 }
 
 func execCommand(arg ...string) {
