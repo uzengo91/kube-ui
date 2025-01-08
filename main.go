@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +31,18 @@ var (
 	k8sClient  *kubernetes.Clientset
 )
 
+// 添加新的配置结构体
+type KubeConfig struct {
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	Namespace string `json:"namespace"`
+	Comment   string `json:"comment"`
+}
+
+type KubeUIConfig struct {
+	Configs []KubeConfig `json:"configs"`
+}
+
 func main() {
 
 	defer line.Close()
@@ -38,6 +52,15 @@ func main() {
 	kubeConfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 	namespace = flag.String("namespace", "", "k8s namespace to use")
 	flag.Parse()
+
+	// 如果未指定 kubeconfig，尝试读取 ~/.kube-ui
+	if *kubeConfig == "" {
+		if err := loadKubeUIConfig(); err != nil {
+			fmt.Printf("Error loading kube-ui config: %v\n", err)
+			return
+		}
+	}
+
 	// 配置文件不能为空
 	if *kubeConfig == "" {
 		fmt.Println("Kubeconfig file is required")
@@ -108,6 +131,59 @@ func main() {
 
 	}
 
+}
+
+// 加载kubeconfig配置
+func loadKubeUIConfig() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("error getting home directory: %v", err)
+	}
+
+	kubeUIPath := filepath.Join(homeDir, ".kube-ui")
+	if _, err := os.Stat(kubeUIPath); err == nil {
+		// 读取并解析 .kube-ui 文件
+		data, err := os.ReadFile(kubeUIPath)
+		if err != nil {
+			return fmt.Errorf("error reading .kube-ui file: %v", err)
+		}
+
+		var config KubeUIConfig
+		if err := json.Unmarshal(data, &config); err != nil {
+			return fmt.Errorf("error parsing .kube-ui file: %v", err)
+		}
+
+		if len(config.Configs) > 0 {
+			// 让用户选择配置
+			var configNames []string
+			for _, cfg := range config.Configs {
+				displayName := cfg.Name
+				if cfg.Comment != "" {
+					displayName += fmt.Sprintf(" (%s)", cfg.Comment)
+				}
+				configNames = append(configNames, displayName)
+			}
+			configNames = append(configNames, "exit")
+
+			var selectedIndex int
+			prompt := &survey.Select{
+				Message: "Choose kubernetes config:",
+				Options: configNames,
+			}
+			survey.AskOne(prompt, &selectedIndex)
+			if selectedIndex == len(configNames)-1 {
+				fmt.Println("bye!!!")
+				os.Exit(0)
+			}
+
+			selectedConfig := config.Configs[selectedIndex]
+			*kubeConfig = selectedConfig.Path
+			if selectedConfig.Namespace != "" {
+				*namespace = selectedConfig.Namespace
+			}
+		}
+	}
+	return nil
 }
 
 func handleNamespacePvcAction() {
