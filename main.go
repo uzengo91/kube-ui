@@ -562,8 +562,36 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 			dst, _ := line.Prompt("Enter remote file path: ")
 			execCommand("cp", src, pod.Name+":"+dst)
 		case "s":
-			// 进入shell
-			execCommand("exec", "-it", pod.Name, "--", "/bin/bash")
+			// 处理容器选择
+			if len(pod.Spec.Containers) == 1 {
+				// 只有一个容器时直接进入
+				execCommand("exec", "-it", pod.Name, "--", "/bin/bash")
+			} else {
+				// 多个容器时显示选择表格
+				table := tablewriter.NewWriter(os.Stdout)
+				table.SetHeader([]string{"Number", "Container Name"})
+
+				for i, container := range pod.Spec.Containers {
+					table.Append([]string{
+						fmt.Sprintf("%d", i),
+						container.Name,
+					})
+				}
+				table.Render()
+
+				// 让用户选择容器
+				var containerNum string
+				prompt := &survey.Input{
+					Message: "Enter container number to exec into: ",
+				}
+				survey.AskOne(prompt, &containerNum)
+
+				if num, err := strconv.Atoi(containerNum); err == nil && num >= 0 && num < len(pod.Spec.Containers) {
+					execCommand("exec", "-it", pod.Name, "-c", pod.Spec.Containers[num].Name, "--", "/bin/bash")
+				} else {
+					fmt.Println("Invalid container number")
+				}
+			}
 		case "e":
 			// 查看pod事件
 			printPodEvents(pod)
