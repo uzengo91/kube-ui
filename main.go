@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/pointer"
 )
 
 var (
@@ -33,12 +35,14 @@ var (
 	buildTime  = "unknown"
 )
 
-// 添加新的配置结构体
+// 修改配置结构体
 type KubeConfig struct {
-	Name      string `json:"name"`
-	Path      string `json:"path"`
-	Namespace string `json:"namespace"`
-	Comment   string `json:"comment"`
+	Name            string `json:"name"`
+	Path            string `json:"path"`
+	Namespace       string `json:"namespace"`
+	Comment         string `json:"comment"`
+	ImagePullSecret string `json:"imagePullSecret,omitempty"` // 新增：镜像拉取密钥
+	TunnelImage     string `json:"tunnelImage,omitempty"`     // 新增：tunnel使用的镜像
 }
 
 type KubeUIConfig struct {
@@ -135,7 +139,7 @@ func runMain() {
 		var action = new(string)
 		prompt := &survey.Select{
 			Message: fmt.Sprintf("choose action in namespace %s:", *namespace),
-			Options: []string{"pods", "svc", "pvc", "configmap", "exit"},
+			Options: []string{"pods", "svc", "pvc", "configmap", "tunnel", "exit"},
 		}
 		err = survey.AskOne(prompt, action)
 		if err != nil {
@@ -152,6 +156,8 @@ func runMain() {
 			handleNamespaceConfigMapAction()
 		case "pvc":
 			handleNamespacePvcAction()
+		case "tunnel":
+			handleTunnelAction()
 		case "exit":
 			fmt.Println("bye!!!")
 			os.Exit(0)
@@ -689,4 +695,169 @@ func execCommand(arg ...string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func handleTunnelAction() {
+	for {
+		var input string
+		prompt := &survey.Input{
+			Message: "Enter target address (e.g. 10.0.0.1:8080 or my-svc.ns:8080), or 'exit' to quit: ",
+		}
+		survey.AskOne(prompt, &input)
+
+		input = strings.TrimSpace(input)
+		if input == "exit" {
+			return
+		}
+
+		// Parse host and port
+		parts := strings.Split(input, ":")
+		if len(parts) != 2 {
+			fmt.Println("Invalid format. Please use host:port")
+			continue
+		}
+
+		host, port := parts[0], parts[1]
+
+		// Get local port
+		var localPort string
+		promptLocal := &survey.Input{
+			Message: "Enter local port to forward to: ",
+		}
+		survey.AskOne(promptLocal, &localPort)
+
+		localPort = strings.TrimSpace(localPort)
+		if localPort == "" {
+			fmt.Println("Local port is required")
+			continue
+		}
+
+		// 获取镜像和密钥配置
+		tunnelImage := "alpine/socat" // 默认镜像
+		var imagePullSecrets []v1.LocalObjectReference
+
+		// 从当前配置中获取镜像和密钥信息
+		homeDir, _ := os.UserHomeDir()
+		kubeUIPath := filepath.Join(homeDir, ".kube-ui")
+		if _, err := os.Stat(kubeUIPath); err == nil {
+			data, err := os.ReadFile(kubeUIPath)
+			if err == nil {
+				var config KubeUIConfig
+				if err := json.Unmarshal(data, &config); err == nil {
+					// 查找当前使用的配置
+					for _, cfg := range config.Configs {
+						if cfg.Path == *kubeConfig {
+							if cfg.TunnelImage != "" {
+								tunnelImage = cfg.TunnelImage
+							}
+							if cfg.ImagePullSecret != "" {
+								imagePullSecrets = append(imagePullSecrets, v1.LocalObjectReference{
+									Name: cfg.ImagePullSecret,
+								})
+							}
+							break
+						}
+					}
+				}
+			}
+		}
+
+		tunnelPod := &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("tunnel-pod-%s", randomString(6)),
+				Namespace: *namespace,
+			},
+			Spec: v1.PodSpec{
+				ImagePullSecrets: imagePullSecrets,
+				Containers: []v1.Container{
+					{
+						Name:            "tunnel",
+						Image:           tunnelImage,
+						ImagePullPolicy: "IfNotPresent",
+						Command: []string{
+							"socat",
+							fmt.Sprintf("TCP-LISTEN:%s,fork,reuseaddr", port),
+							fmt.Sprintf("TCP:%s:%s", host, port),
+						},
+					},
+				},
+				RestartPolicy:         v1.RestartPolicyNever,
+				ActiveDeadlineSeconds: pointer.Int64(3600),
+			},
+		}
+
+		fmt.Printf("Creating tunnel pod for %s:%s...\n", host, port)
+		pod, err := k8sClient.CoreV1().Pods(*namespace).Create(context.TODO(), tunnelPod, metav1.CreateOptions{})
+		if err != nil {
+			fmt.Printf("Error creating tunnel pod: %v\n", err)
+			continue
+		}
+
+		// Wait for pod to be ready
+		fmt.Println("Waiting for tunnel pod to be ready...")
+		startTime := time.Now()
+		for {
+			pod, err = k8sClient.CoreV1().Pods(*namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
+			if err != nil {
+				fmt.Printf("Error getting pod status: %v\n", err)
+				break
+			}
+			if pod.Status.Phase == v1.PodRunning {
+				break
+			}
+			time.Sleep(1 * time.Second)
+			fmt.Printf("Waiting for tunnel pod. Total time cost: %s\n", time.Since(startTime))
+			fmt.Printf("Pod status: %s\n", pod.Status.Phase)
+
+			// 输出容器状态和错误信息
+			for _, containerStatus := range pod.Status.ContainerStatuses {
+				if containerStatus.State.Waiting != nil {
+					fmt.Printf("Container %s is waiting: %s - %s\n",
+						containerStatus.Name,
+						containerStatus.State.Waiting.Reason,
+						containerStatus.State.Waiting.Message)
+				}
+				if containerStatus.State.Terminated != nil {
+					fmt.Printf("Container %s terminated: %s - %s (exit code: %d)\n",
+						containerStatus.Name,
+						containerStatus.State.Terminated.Reason,
+						containerStatus.State.Terminated.Message,
+						containerStatus.State.Terminated.ExitCode)
+				}
+			}
+
+			// 输出 pod 事件
+			events, err := k8sClient.CoreV1().Events(*namespace).List(context.TODO(), metav1.ListOptions{
+				FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Pod", pod.Name),
+			})
+			if err == nil {
+				for _, event := range events.Items {
+					fmt.Printf("Event: Type=%s Reason=%s Message=%s\n",
+						event.Type,
+						event.Reason,
+						event.Message)
+				}
+			}
+		}
+
+		fmt.Printf("Tunneling %s:%s to localhost:%s\n", host, port, localPort)
+		execCommand("port-forward", fmt.Sprintf("pod/%s", pod.Name), fmt.Sprintf("%s:%s", localPort, port))
+
+		// Cleanup
+		fmt.Println("Cleaning up tunnel pod...")
+		err = k8sClient.CoreV1().Pods(*namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+		if err != nil {
+			fmt.Printf("Error deleting tunnel pod: %v\n", err)
+		}
+	}
+}
+
+// 生成随机字符串
+func randomString(n int) string {
+	const letterBytes = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
 }
