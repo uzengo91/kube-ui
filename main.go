@@ -565,7 +565,10 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 			// 处理容器选择
 			if len(pod.Spec.Containers) == 1 {
 				// 只有一个容器时直接进入
-				execCommand("exec", "-it", pod.Name, "--", "/bin/bash")
+				if err := execCommand("exec", "-it", pod.Name, "--", "/bin/bash"); err != nil {
+					// If bash fails, try sh
+					execCommand("exec", "-it", pod.Name, "--", "/bin/sh")
+				}
 			} else {
 				// 多个容器时显示选择表格
 				table := tablewriter.NewWriter(os.Stdout)
@@ -587,7 +590,10 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 				survey.AskOne(prompt, &containerNum)
 
 				if num, err := strconv.Atoi(containerNum); err == nil && num >= 0 && num < len(pod.Spec.Containers) {
-					execCommand("exec", "-it", pod.Name, "-c", pod.Spec.Containers[num].Name, "--", "/bin/bash")
+					if err := execCommand("exec", "-it", pod.Name, "-c", pod.Spec.Containers[num].Name, "--", "/bin/bash"); err != nil {
+						// If bash fails, try sh
+						execCommand("exec", "-it", pod.Name, "-c", pod.Spec.Containers[num].Name, "--", "/bin/sh")
+					}
 				} else {
 					fmt.Println("Invalid container number")
 				}
@@ -647,7 +653,7 @@ func printPodEvents(pod v1.Pod) {
 	table.Render()
 }
 
-func execCommand(arg ...string) {
+func execCommand(arg ...string) error {
 	defaultArg := []string{"--kubeconfig", *kubeConfig, "-n", *namespace}
 	arg = append(defaultArg, arg...)
 	cmd := exec.Command("kubectl", arg...)
@@ -655,5 +661,5 @@ func execCommand(arg ...string) {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Run()
+	return cmd.Run()
 }
