@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/olekukonko/tablewriter"
 
+	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -29,6 +29,8 @@ var (
 	kubeConfig *string
 	namespace  *string = new(string)
 	k8sClient  *kubernetes.Clientset
+	version    = "V0.0.1"
+	buildTime  = "unknown"
 )
 
 // 添加新的配置结构体
@@ -43,16 +45,41 @@ type KubeUIConfig struct {
 	Configs []KubeConfig `json:"configs"`
 }
 
-func main() {
+var rootCmd = &cobra.Command{
+	Use:   "kube-ui",
+	Short: "A Kubernetes CLI UI tool",
+	Long:  `kube-ui is a CLI tool that provides an interactive interface for managing Kubernetes resources`,
+	Run: func(cmd *cobra.Command, args []string) {
+		runMain()
+	},
+}
 
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the version number",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Printf("kube-ui version %s\n", version)
+		fmt.Printf("Build Time: %s\n", buildTime)
+	},
+}
+
+func init() {
+	kubeConfig = rootCmd.PersistentFlags().StringP("kubeconfig", "f", "", "absolute path to the kubeconfig file")
+	namespace = rootCmd.PersistentFlags().StringP("namespace", "n", "", "k8s namespace to use")
+
+	rootCmd.AddCommand(versionCmd)
+}
+
+func main() {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}
+
+func runMain() {
 	defer line.Close()
 	line.SetCtrlCAborts(true)
-
-	// 获取配置文件路径
-
-	kubeConfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	namespace = flag.String("namespace", "", "k8s namespace to use")
-	flag.Parse()
 
 	// 如果未指定 kubeconfig，尝试读取 ~/.kube-ui
 	if *kubeConfig == "" {
@@ -87,7 +114,7 @@ func main() {
 			namespaces, err := k8sClient.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
 			if err != nil {
 				fmt.Printf("Error listing namespaces: %v\n", err)
-				fmt.Printf("获取命名空间列表失败，请检查是否有权限，可手动指定命名空间")
+				fmt.Printf("Failed to get namespace list, please check if you have permission, you can manually specify the namespace")
 				return
 			}
 			var namespaceList = make([]string, 0)
@@ -192,7 +219,7 @@ func handleNamespacePvcAction() {
 	pvcList, err := k8sClient.CoreV1().PersistentVolumeClaims(*namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Printf("Error listing pvcs: %v\n", err)
-		fmt.Printf("获取命名空间%s下的Pvc列表失败", *namespace)
+		fmt.Printf("Failed to get the Pvc list under namespace %s", *namespace)
 		return
 	}
 	// 打印Pvc列表
@@ -254,7 +281,7 @@ func handleNamespaceConfigMapAction() {
 	configMaps, err := k8sClient.CoreV1().ConfigMaps(*namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Printf("Error listing configmaps: %v\n", err)
-		fmt.Printf("获取命名空间%s下的ConfigMap列表失败", *namespace)
+		fmt.Printf("Failed to retrieve the ConfigMap list in the namespace %s", *namespace)
 		return
 	}
 	// 打印ConfigMap列表
@@ -316,7 +343,7 @@ func handleNamespaceSvcAction() {
 	svcList, err := k8sClient.CoreV1().Services(*namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Printf("Error listing services: %v\n", err)
-		fmt.Printf("获取命名空间%s下的Service列表失败", *namespace)
+		fmt.Printf("Failed to get the Service list under namespace %s", *namespace)
 		return
 	}
 	// 打印Service列表
@@ -355,7 +382,7 @@ func handleNamespacePodAction() {
 	pods, err := k8sClient.CoreV1().Pods(*namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Printf("Error listing pods: %v\n", err)
-		fmt.Printf("获取命名空间%s下的Pod列表失败", *namespace)
+		fmt.Printf("Failed to get the Pod list under namespace %s", *namespace)
 		return
 	}
 

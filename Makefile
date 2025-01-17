@@ -9,6 +9,10 @@ GO := go
 # 输出目录
 OUTPUT_DIR := bin
 
+# 获取版本号和编译时间
+VERSION := $(shell if [ -f .version ]; then cat .version; else echo "dev"; fi)
+BUILD_TIME := $(shell date "+%Y-%m-%d %H:%M:%S")
+
 # 默认目标
 .PHONY: all
 all: build-windows build-linux build-mac
@@ -17,17 +21,17 @@ all: build-windows build-linux build-mac
 .PHONY: build-windows
 build-windows:
 	@echo "Building for Windows..."
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -o $(OUTPUT_DIR)/$(PROJECT_NAME).exe
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -ldflags="-X main.version=$(VERSION) -X 'main.buildTime=$(BUILD_TIME)'" -o $(OUTPUT_DIR)/$(PROJECT_NAME).exe
 
 build-mac:
 	@echo "Building for Mac..."
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GO) build -o $(OUTPUT_DIR)/$(PROJECT_NAME)-mac
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GO) build -ldflags="-X main.version=$(VERSION) -X 'main.buildTime=$(BUILD_TIME)'" -o $(OUTPUT_DIR)/$(PROJECT_NAME)-mac
 
 # 构建 Linux 可执行文件
 .PHONY: build-linux
 build-linux:
 	@echo "Building for Linux..."
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -o $(OUTPUT_DIR)/$(PROJECT_NAME)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags="-X main.version=$(VERSION) -X 'main.buildTime=$(BUILD_TIME)'" -o $(OUTPUT_DIR)/$(PROJECT_NAME)
 
 # 清理构建文件
 .PHONY: clean
