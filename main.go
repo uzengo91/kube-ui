@@ -8,9 +8,11 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/peterh/liner"
@@ -730,7 +732,32 @@ func execCommand(arg ...string) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+
+	// 创建信号通道
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	// 创建错误通道
+	errChan := make(chan error, 1)
+
+	// 在后台运行命令
+	go func() {
+		errChan <- cmd.Run()
+	}()
+
+	// 等待信号或命令完成
+	select {
+	case sig := <-sigChan:
+		fmt.Printf("\nReceived signal: %v\n", sig)
+		// 优雅地终止进程
+		if err := cmd.Process.Signal(os.Interrupt); err != nil {
+			fmt.Printf("Failed to send interrupt signal: %v\n", err)
+			cmd.Process.Kill()
+		}
+		return fmt.Errorf("command interrupted")
+	case err := <-errChan:
+		return err
+	}
 }
 
 func handleTunnelAction() {
