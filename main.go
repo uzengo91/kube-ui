@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -23,7 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 var (
@@ -67,11 +68,46 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+var configCmd = &cobra.Command{
+	Use:   "config",
+	Short: "Display kube-ui configuration",
+	Run: func(cmd *cobra.Command, args []string) {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Printf("Error getting home directory: %v\n", err)
+			return
+		}
+
+		kubeUIPath := filepath.Join(homeDir, ".kube-ui")
+		if _, err := os.Stat(kubeUIPath); err != nil {
+			fmt.Printf("No configuration file found at %s\n", kubeUIPath)
+			return
+		}
+
+		data, err := os.ReadFile(kubeUIPath)
+		if err != nil {
+			fmt.Printf("Error reading .kube-ui file: %v\n", err)
+			return
+		}
+
+		// 格式化 JSON 输出
+		var prettyJSON bytes.Buffer
+		if err := json.Indent(&prettyJSON, data, "", "    "); err != nil {
+			fmt.Printf("Error formatting JSON: %v\n", err)
+			return
+		}
+
+		fmt.Printf("Configuration file: %s\n\n", kubeUIPath)
+		fmt.Println(prettyJSON.String())
+	},
+}
+
 func init() {
 	kubeConfig = rootCmd.PersistentFlags().StringP("kubeconfig", "f", "", "absolute path to the kubeconfig file")
 	namespace = rootCmd.PersistentFlags().StringP("namespace", "n", "", "k8s namespace to use")
 
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(configCmd)
 }
 
 func main() {
@@ -782,7 +818,7 @@ func handleTunnelAction() {
 					},
 				},
 				RestartPolicy:         v1.RestartPolicyNever,
-				ActiveDeadlineSeconds: pointer.Int64(3600),
+				ActiveDeadlineSeconds: ptr.To(int64(3600)),
 			},
 		}
 
