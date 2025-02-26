@@ -18,6 +18,7 @@ import (
 	"github.com/peterh/liner"
 
 	"github.com/AlecAivazis/survey/v2"
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 
 	"github.com/olekukonko/tablewriter"
@@ -177,7 +178,7 @@ func runMain() {
 		var action = new(string)
 		prompt := &survey.Select{
 			Message: fmt.Sprintf("choose action in namespace %s:", *namespace),
-			Options: []string{"pods", "svc", "pvc", "configmap", "tunnel", "exit"},
+			Options: []string{"pods", "deployments", "svc", "pvc", "configmap", "tunnel", "exit"},
 		}
 		err = survey.AskOne(prompt, action)
 		if err != nil {
@@ -188,6 +189,8 @@ func runMain() {
 		switch *action {
 		case "pods":
 			handleNamespacePodAction()
+		case "deployments":
+			handleNamespaceDeploymentAction()
 		case "svc":
 			handleNamespaceSvcAction()
 		case "configmap":
@@ -203,6 +206,85 @@ func runMain() {
 
 	}
 
+}
+
+func handleNamespaceDeploymentAction() {
+	// 获取Deployment列表
+	deployments, err := k8sClient.AppsV1().Deployments(*namespace).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		fmt.Printf("Error listing deployments: %v\n", err)
+		fmt.Printf("Failed to get the Deployment list under namespace %s", *namespace)
+		return
+	}
+	// 打印Deployment列表
+	fmt.Println("Deployments in namespace", *namespace)
+	printDeploymentTable(deployments, "", nil)
+	for {
+		input := ""
+		prompt := &survey.Input{
+			Message: "Enter deployment number or search, exit to quit: ",
+		}
+		survey.AskOne(prompt, &input)
+
+		// 	// 检查输入是否为数字
+		podNumber, err := strconv.Atoi(input)
+		if err == nil && podNumber >= 0 && podNumber < len(deployments.Items) {
+			selectedDeployment := deployments.Items[podNumber]
+			handleDeploymentAction(line, selectedDeployment)
+			deployments, _ = k8sClient.AppsV1().Deployments(*namespace).List(context.TODO(), metav1.ListOptions{})
+			printDeploymentTable(deployments, "", nil)
+		} else {
+			//如果== exit 退出
+			if input == "exit" {
+				return
+			}
+			printDeploymentTable(deployments, input, func(deployment appsv1.Deployment, input string) bool {
+				return strings.Contains(deployment.Name, input)
+			})
+		}
+	}
+}
+
+func handleDeploymentAction(line *liner.State, selectedDeployment appsv1.Deployment) {
+	for {
+		fmt.Println("====================================")
+		// 高亮显示选中的Deployment名称
+		fmt.Printf("Selected Deployment: \033[1;33m %s \033[0m \n", selectedDeployment.Name)
+		fmt.Println("====================================")
+		fmt.Println("command action [p, s, exit]: ")
+		fmt.Println("\u001B[0;31m p \u001B[0m: print Deployment info")
+		fmt.Println("\u001B[0;31m s \u001B[0m: scale Deployment")
+		fmt.Println("\u001B[0;31m exit \u001B[0m: quit current action")
+
+		action, _ := line.Prompt("Enter action: ")
+		action = strings.TrimSpace(action)
+
+		switch action {
+		case "p":
+			execCommand("get", "deployment", selectedDeployment.Name, "-o", "yaml")
+		case "s":
+			handleDeploymentScaleNumAction(line, selectedDeployment)
+		case "exit":
+			return
+		default:
+			fmt.Println("Invalid action")
+		}
+	}
+}
+
+func handleDeploymentScaleNumAction(line *liner.State, selectedDeployment appsv1.Deployment) {
+	// 设置Deployment的副本数
+	scaleNum, _ := line.Prompt("Enter the number of replicas: ")
+	execCommand("scale", "deployment", selectedDeployment.Name, "--replicas="+scaleNum)
+}
+
+func printDeploymentTable(deployments *appsv1.DeploymentList, s string, f func(deployment appsv1.Deployment, input string) bool) {
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Number", "Name", "Replicas", "Age"})
+	for i, deployment := range deployments.Items {
+		table.Append([]string{fmt.Sprintf("%d", i), deployment.Name, fmt.Sprintf("%d/%d", deployment.Status.Replicas, deployment.Status.Replicas), deployment.CreationTimestamp.Format(time.RFC3339)})
+	}
+	table.Render()
 }
 
 // 加载kubeconfig配置
@@ -593,7 +675,7 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 		// 高亮显示选中的Pod名称
 		fmt.Printf("Selected pod: \033[1;33m %s \033[0m \n", pod.Name)
 		fmt.Println("====================================")
-		fmt.Println("command action [p, l, lf, s, e, fw, cp, u, exit]: ")
+		fmt.Println("command action [p, l, lf, s, e, fw, cp, u, del, exit]: ")
 		fmt.Println("\u001B[0;31m p \u001B[0m: print pod info")
 		fmt.Println("\u001B[0;31m l \u001B[0m: view all logs")
 		fmt.Println("\u001B[0;31m lf \u001B[0m: view rolling logs")
@@ -602,6 +684,7 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 		fmt.Println("\u001B[0;31m fw \u001B[0m: port forward remote port to local")
 		fmt.Println("\u001B[0;31m cp \u001B[0m: copy remote file to current path, download file name is remote file name")
 		fmt.Println("\u001B[0;31m u \u001B[0m: upload local file to remote pod")
+		fmt.Println("\u001B[0;31m del \u001B[0m: delete pod")
 		fmt.Println("\u001B[0;31m exit \u001B[0m: quit current action")
 
 		action, _ := line.Prompt("Enter action: ")
@@ -685,6 +768,9 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 				forwardPort = append(forwardPort, portPairNew)
 			}
 			execCommand(forwardPort...)
+		case "del":
+			// 删除pod
+			execCommand("delete", "pod", pod.Name)
 		case "exit":
 			return
 		default:
@@ -859,7 +945,8 @@ func handleTunnelAction() {
 		// Wait for pod to be ready
 		fmt.Println("Waiting for tunnel pod to be ready...")
 		startTime := time.Now()
-		for {
+		// 超过10次，则退出
+		for i := 0; i < 10; i++ {
 			pod, err = k8sClient.CoreV1().Pods(*namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
 			if err != nil {
 				fmt.Printf("Error getting pod status: %v\n", err)
@@ -901,6 +988,11 @@ func handleTunnelAction() {
 						event.Message)
 				}
 			}
+		}
+		// 超过10次，则退出
+		if err != nil {
+			fmt.Printf("Error getting pod status: %v\n", err)
+			break
 		}
 
 		fmt.Printf("Tunneling %s:%s to localhost:%s\n", host, port, localPort)
