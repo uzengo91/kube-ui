@@ -945,8 +945,8 @@ func handleTunnelAction() {
 		// Wait for pod to be ready
 		fmt.Println("Waiting for tunnel pod to be ready...")
 		startTime := time.Now()
-		// 超过10次，则退出
-		for i := 0; i < 10; i++ {
+		// 超过100次，则退出
+		for i := 0; i < 100; i++ {
 			pod, err = k8sClient.CoreV1().Pods(*namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
 			if err != nil {
 				fmt.Printf("Error getting pod status: %v\n", err)
@@ -992,6 +992,11 @@ func handleTunnelAction() {
 		// 超过10次，则退出
 		if err != nil {
 			fmt.Printf("Error getting pod status: %v\n", err)
+			break
+		}
+		// 如果pod不是running状态，则退出
+		if pod.Status.Phase != v1.PodRunning {
+			fmt.Printf("Tunnel pod %s is not running\n", pod.Name)
 			break
 		}
 
