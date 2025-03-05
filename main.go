@@ -199,9 +199,12 @@ func runMain() {
 			handleNamespacePvcAction()
 		case "tunnel":
 			handleTunnelAction()
-		case "exit":
-			fmt.Println("bye!!!")
-			os.Exit(0)
+		default:
+			shouldReturn := checkExitCode(*action)
+			if shouldReturn {
+				return
+			}
+			fmt.Println("Invalid action")
 		}
 
 	}
@@ -235,7 +238,8 @@ func handleNamespaceDeploymentAction() {
 			printDeploymentTable(deployments, "", nil)
 		} else {
 			//如果== exit 退出
-			if input == "exit" {
+			shouldReturn := checkExitCode(input)
+			if shouldReturn {
 				return
 			}
 			printDeploymentTable(deployments, input, func(deployment appsv1.Deployment, input string) bool {
@@ -264,9 +268,11 @@ func handleDeploymentAction(line *liner.State, selectedDeployment appsv1.Deploym
 			execCommand("get", "deployment", selectedDeployment.Name, "-o", "yaml")
 		case "s":
 			handleDeploymentScaleNumAction(line, selectedDeployment)
-		case "exit":
-			return
 		default:
+			shouldReturn := checkExitCode(action)
+			if shouldReturn {
+				return
+			}
 			fmt.Println("Invalid action")
 		}
 	}
@@ -367,7 +373,8 @@ func handleNamespacePvcAction() {
 			printPvcTable(pvcList, "", nil)
 		} else {
 			//如果== exit 退出
-			if input == "exit" {
+			shouldReturn := checkExitCode(input)
+			if shouldReturn {
 				return
 			}
 			printPvcTable(pvcList, input, func(pvc v1.PersistentVolumeClaim, input string) bool {
@@ -394,9 +401,11 @@ func handlePvcAction(line *liner.State, selectedPvc v1.PersistentVolumeClaim) {
 		switch action {
 		case "p":
 			execCommand("get", "pvc", selectedPvc.Name, "-o", "yaml")
-		case "exit":
-			return
 		default:
+			shouldReturn := checkExitCode(action)
+			if shouldReturn {
+				return
+			}
 			fmt.Println("Invalid action")
 		}
 	}
@@ -430,7 +439,8 @@ func handleNamespaceConfigMapAction() {
 			printConfigMapTable(configMaps, "", nil)
 		} else {
 			//如果== exit 退出
-			if input == "exit" {
+			shouldReturn := checkExitCode(input)
+			if shouldReturn {
 				return
 			}
 			printConfigMapTable(configMaps, input, func(pod v1.ConfigMap, input string) bool {
@@ -463,9 +473,11 @@ func handleConfigMapAction(line *liner.State, selectedConfigMap v1.ConfigMap) {
 		case "a":
 			yamlFile, _ := line.Prompt("Enter local yaml file path: ")
 			execCommand("apply", "-f", yamlFile)
-		case "exit":
-			return
 		default:
+			shouldReturn := checkExitCode(action)
+			if shouldReturn {
+				return
+			}
 			fmt.Println("Invalid action")
 		}
 	}
@@ -497,8 +509,8 @@ func handleNamespaceSvcAction() {
 			svcList, _ = k8sClient.CoreV1().Services(*namespace).List(context.TODO(), metav1.ListOptions{})
 			printSvcTable(svcList, "", nil)
 		} else {
-			//如果== exit 退出
-			if input == "exit" {
+			shouldReturn := checkExitCode(input)
+			if shouldReturn {
 				return
 			}
 			printSvcTable(svcList, input, func(pod v1.Service, input string) bool {
@@ -542,7 +554,8 @@ func handleNamespacePodAction() {
 			printPodTable(pods, "", nil)
 		} else {
 			//如果== exit 退出
-			if input == "exit" {
+			shouldReturn := checkExitCode(input)
+			if shouldReturn {
 				return
 			}
 			// 搜索Pod名称
@@ -558,6 +571,18 @@ func handleNamespacePodAction() {
 		}
 	}
 
+}
+
+func checkExitCode(input string) bool {
+	if input == "exit" {
+		return true
+	}
+	if input == "exit 0" {
+		fmt.Println("exit 0")
+		os.Exit(0)
+		return true
+	}
+	return false
 }
 
 func printPvcTable(pvcList *v1.PersistentVolumeClaimList, s string, f func(pvc v1.PersistentVolumeClaim, input string) bool) {
@@ -668,9 +693,11 @@ func handleSvcAction(line *liner.State, svc v1.Service) {
 				forwardPort = append(forwardPort, portPairNew)
 			}
 			execCommand(forwardPort...)
-		case "exit":
-			return
 		default:
+			shouldReturn := checkExitCode(action)
+			if shouldReturn {
+				return
+			}
 			fmt.Println("Invalid action")
 		}
 	}
@@ -783,9 +810,11 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 		case "del":
 			// 删除pod
 			execCommand("delete", "pod", pod.Name)
-		case "exit":
-			return
 		default:
+			shouldReturn := checkExitCode(action)
+			if shouldReturn {
+				return
+			}
 			fmt.Println("Invalid action")
 		}
 	}
@@ -867,7 +896,8 @@ func handleTunnelAction() {
 		survey.AskOne(prompt, &input)
 
 		input = strings.TrimSpace(input)
-		if input == "exit" {
+		shouldReturn := checkExitCode(input)
+		if shouldReturn {
 			return
 		}
 
