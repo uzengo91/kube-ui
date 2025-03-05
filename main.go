@@ -178,7 +178,7 @@ func runMain() {
 		var action = new(string)
 		prompt := &survey.Select{
 			Message: fmt.Sprintf("choose action in namespace %s:", *namespace),
-			Options: []string{"pods", "deployments", "svc", "pvc", "configmap", "tunnel", "exit"},
+			Options: []string{"pods", "deployments", "svc", "pvc", "pv", "configmap", "tunnel", "exit"},
 		}
 		err = survey.AskOne(prompt, action)
 		if err != nil {
@@ -197,6 +197,8 @@ func runMain() {
 			handleNamespaceConfigMapAction()
 		case "pvc":
 			handleNamespacePvcAction()
+		case "pv":
+			handleNamespacePvAction()
 		case "tunnel":
 			handleTunnelAction()
 		default:
@@ -209,6 +211,85 @@ func runMain() {
 
 	}
 
+}
+
+func handleNamespacePvAction() {
+	// 获取Pv列表
+	pvList, err := k8sClient.CoreV1().PersistentVolumes().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		fmt.Printf("Error listing pvcs: %v\n", err)
+		fmt.Printf("Failed to get the Pvc list under namespace %s", *namespace)
+		return
+	}
+	// 打印Pv列表
+	fmt.Println("Pvs in namespace", *namespace)
+	printPvTable(pvList, "", nil)
+	for {
+		input := ""
+		prompt := &survey.Input{
+			Message: "Enter pv number or search, exit to quit: ",
+		}
+		survey.AskOne(prompt, &input)
+
+		// 	// 检查输入是否为数字
+		pvNumber, err := strconv.Atoi(input)
+		if err == nil && pvNumber >= 0 && pvNumber < len(pvList.Items) {
+			selectedPv := pvList.Items[pvNumber]
+			handlePvAction(line, selectedPv)
+			pvList, _ = k8sClient.CoreV1().PersistentVolumes().List(context.TODO(), metav1.ListOptions{})
+			printPvTable(pvList, "", nil)
+		} else {
+			//如果== exit 退出
+			shouldReturn := checkExitCode(input)
+			if shouldReturn {
+				return
+			}
+			printPvTable(pvList, input, func(pv v1.PersistentVolume, input string) bool {
+				return strings.Contains(pv.Name, input)
+			})
+		}
+	}
+}
+
+func handlePvAction(line *liner.State, selectedPv v1.PersistentVolume) {
+	for {
+		fmt.Println("====================================")
+		// 高亮显示选中的Pv名称
+		fmt.Printf("Selected Pv: \033[1;33m %s \033[0m \n", selectedPv.Name)
+		fmt.Println("====================================")
+		fmt.Println("command action [p, exit]: ")
+		fmt.Println("\u001B[0;31m p \u001B[0m: print Pv info")
+		fmt.Println("\u001B[0;31m exit \u001B[0m: quit current action")
+
+		action, _ := line.Prompt("Enter action: ")
+		action = strings.TrimSpace(action)
+
+		switch action {
+		case "p":
+			// 打印Pv信息
+			fmt.Println("==============get pv info======================")
+			execCommand("get", "pv", selectedPv.Name, "-o", "yaml")
+			fmt.Println("")
+			// describe pv
+			fmt.Println("==============describe pv======================")
+			execCommand("describe", "pv", selectedPv.Name)
+		default:
+			shouldReturn := checkExitCode(action)
+			if shouldReturn {
+				return
+			}
+			fmt.Println("Invalid action")
+		}
+	}
+}
+
+func printPvTable(pvList *v1.PersistentVolumeList, s string, f func(pv v1.PersistentVolume, input string) bool) {
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Number", "Name", "Status", "StorageClass", "Capacity"})
+	for i, pv := range pvList.Items {
+		table.Append([]string{fmt.Sprintf("%d", i), pv.Name, string(pv.Status.Phase), pv.Spec.StorageClassName, pv.Spec.Capacity.Storage().String()})
+	}
+	table.Render()
 }
 
 func handleNamespaceDeploymentAction() {
@@ -400,7 +481,12 @@ func handlePvcAction(line *liner.State, selectedPvc v1.PersistentVolumeClaim) {
 
 		switch action {
 		case "p":
+			fmt.Println("==============get pvc info======================")
 			execCommand("get", "pvc", selectedPvc.Name, "-o", "yaml")
+			fmt.Println("")
+			// describe pvc
+			fmt.Println("==============describe pvc======================")
+			execCommand("describe", "pvc", selectedPvc.Name)
 		default:
 			shouldReturn := checkExitCode(action)
 			if shouldReturn {
@@ -578,7 +664,7 @@ func checkExitCode(input string) bool {
 		return true
 	}
 	if input == "exit 0" {
-		fmt.Println("exit 0")
+		fmt.Println("bye bye !!! exit 0")
 		os.Exit(0)
 		return true
 	}
