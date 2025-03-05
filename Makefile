@@ -45,8 +45,8 @@ clean:
 install:
 	@echo "installing..."
 ifeq ($(shell uname), Darwin)
-	cp $(OUTPUT_DIR)/$(PROJECT_NAME)-mac /usr/local/bin/$(PROJECT_NAME)
+	mv $(OUTPUT_DIR)/$(PROJECT_NAME)-mac /usr/local/bin/$(PROJECT_NAME)
 else ifeq ($(shell uname), Linux)
-	cp $(OUTPUT_DIR)/$(PROJECT_NAME) /usr/local/bin/$(PROJECT_NAME)
+	mv $(OUTPUT_DIR)/$(PROJECT_NAME) /usr/local/bin/$(PROJECT_NAME)
 endif
 
