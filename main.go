@@ -446,8 +446,10 @@ func handleConfigMapAction(line *liner.State, selectedConfigMap v1.ConfigMap) {
 		// 高亮显示选中的ConfigMap名称
 		fmt.Printf("Selected ConfigMap: \033[1;33m %s \033[0m \n", selectedConfigMap.Name)
 		fmt.Println("====================================")
-		fmt.Println("command action [p, exit]: ")
+		fmt.Println("command action [p, e, a, exit]: ")
 		fmt.Println("\u001B[0;31m p \u001B[0m: print ConfigMap info")
+		fmt.Println("\u001B[0;31m e \u001B[0m: edit ConfigMap")
+		fmt.Println("\u001B[0;31m a \u001B[0m: apply local yaml file to ConfigMap")
 		fmt.Println("\u001B[0;31m exit \u001B[0m: quit current action")
 
 		action, _ := line.Prompt("Enter action: ")
@@ -456,6 +458,11 @@ func handleConfigMapAction(line *liner.State, selectedConfigMap v1.ConfigMap) {
 		switch action {
 		case "p":
 			execCommand("get", "configmap", selectedConfigMap.Name, "-o", "yaml")
+		case "e":
+			execCommand("edit", "configmap", selectedConfigMap.Name)
+		case "a":
+			yamlFile, _ := line.Prompt("Enter local yaml file path: ")
+			execCommand("apply", "-f", yamlFile)
 		case "exit":
 			return
 		default:
@@ -693,7 +700,12 @@ func handlePodAction(line *liner.State, pod v1.Pod) {
 		switch action {
 		case "p":
 			// 查看pod信息
+			fmt.Println("==============get pod info======================")
 			execCommand("get", "pod", pod.Name, "-o", "yaml")
+			fmt.Println("")
+			// describe pod
+			fmt.Println("==============describe pod======================")
+			execCommand("describe", "pod", pod.Name)
 			// cmd := exec.Command("kubectl", "--kubeconfig", *kubeConfig, "-n", *namespace, "get", "pod", pod.Name, "-o", "yaml")
 			// cmd.Stdout = os.Stdout
 			// cmd.Stderr = os.Stderr
