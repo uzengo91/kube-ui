@@ -766,7 +766,12 @@ func handleSvcAction(line *liner.State, svc v1.Service) {
 
 		switch action {
 		case "p":
+			fmt.Println("==============get svc info======================")
 			execCommand("get", "svc", svc.Name, "-o", "yaml")
+			fmt.Println("")
+			// describe svc
+			fmt.Println("==============describe svc======================")
+			execCommand("describe", "svc", svc.Name)
 		case "fw":
 			ports, _ := line.Prompt("please enter forward ports, example: \"localPort1:svcPort1 localPort2:svcPort2\", so you can input \"8080:80 9090:90\" ")
 			ports = strings.TrimSpace(ports)
