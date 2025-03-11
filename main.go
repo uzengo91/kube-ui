@@ -178,7 +178,7 @@ func runMain() {
 		var action = new(string)
 		prompt := &survey.Select{
 			Message: fmt.Sprintf("choose action in namespace %s:", *namespace),
-			Options: []string{"pods", "deployments", "svc", "pvc", "pv", "configmap", "tunnel", "exit"},
+			Options: []string{"k9s", "pods", "deployments", "svc", "pvc", "pv", "configmap", "tunnel", "exit"},
 		}
 		err = survey.AskOne(prompt, action)
 		if err != nil {
@@ -187,6 +187,37 @@ func runMain() {
 			return
 		}
 		switch *action {
+		case "k9s":
+			arg := []string{"--kubeconfig", *kubeConfig, "--namespace", *namespace}
+			cmd := exec.Command("k9s", arg...)
+			fmt.Println("执行命令: \u001B[0;31m " + cmd.String() + " \u001B[0m")
+			
+			// 设置标准输入输出，支持外部键盘输入
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			
+			// 创建一个新的进程组，确保键盘输入能被正确处理
+			cmd.SysProcAttr = &syscall.SysProcAttr{
+				// 设置为前台进程组，使其能接收终端信号
+				Setpgid: true,
+				Foreground: true,
+				// 设置控制终端，确保键盘输入能正确传递给子进程
+				Ctty: int(os.Stdin.Fd()),
+			}
+			
+			// 使用Start和Wait替代Run，以便更好地控制进程生命周期
+			if err := cmd.Start(); err != nil {
+				fmt.Printf("exec k9s command failed: %v\n", err)
+				return
+			}
+
+			// 等待进程完成
+			if err := cmd.Wait(); err != nil {
+				// 某些退出码可能是正常的，如用户按Ctrl+C退出
+				fmt.Printf("k9s process exited: %v\n", err)
+				os.Exit(0)
+			}
 		case "pods":
 			handleNamespacePodAction()
 		case "deployments":
